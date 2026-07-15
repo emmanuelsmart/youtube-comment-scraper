@@ -44,18 +44,29 @@ async def run_deep_browser_scrape(target_url, max_scrolls):
     emails_found = []
     status_msg = st.empty()
     
-    # Establish pipeline connectivity directly to Browserless Cloud Instance
-    ws_endpoint = f"wss://chrome.browserless.io/playwright?token={BROWSERLESS_TOKEN}"
+    # Updated connection target formatting for native Playwright WebSocket handling
+    ws_endpoint = f"wss://chrome.browserless.io/playwright?token={BROWSERLESS_TOKEN}&--disable-web-security=true"
     
     async with async_playwright() as p:
         status_msg.text("🌐 Establishing connection to remote cloud browser...")
-        browser = await p.chromium.connect_over_cdp(ws_endpoint)
+        try:
+            # Using the standardized connect driver instead of cdp connection profiles
+            browser = await p.chromium.connect(ws_endpoint, timeout=30000)
+        except Exception as conn_err:
+            st.error(f"Failed to connect to Browserless Cloud Instance: {str(conn_err)}")
+            return []
+            
         context = await browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
         page = await context.new_page()
         
         status_msg.text("📹 Navigating to target video layout...")
-        await page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
-        await page.wait_for_timeout(4000)
+        try:
+            await page.goto(target_url, wait_until="domcontentloaded", timeout=45000)
+            await page.wait_for_timeout(4000)
+        except Exception as nav_err:
+            st.error(f"Page loading timed out or failed: {str(nav_err)}")
+            await browser.close()
+            return []
         
         # Initial scroll to bring the comment section DOM elements into active view
         await page.evaluate("window.scrollTo(0, 700);")
@@ -89,7 +100,8 @@ async def run_deep_browser_scrape(target_url, max_scrolls):
         for text in comment_nodes:
             matches = re.findall(EMAIL_REGEX, text)
             for email in matches:
-                if email not in [e['Email'] for e in emails_found]:
+                # Normalizing lookup dictionary key to prevent mismatch tracking
+                if email not in [e.get('Captured Email') for e in emails_found]:
                     emails_found.append({
                         "Captured Email": email,
                         "Source Comment Context": text[:120] + "..."
