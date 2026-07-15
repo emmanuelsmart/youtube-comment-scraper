@@ -44,14 +44,14 @@ async def run_deep_browser_scrape(target_url, max_scrolls):
     emails_found = []
     st_status = st.empty()
     
-    # FIX: Using /chromium path as required by the Browserless system architecture update
-    ws_endpoint = f"wss://chrome.browserless.io/chromium?token={BROWSERLESS_TOKEN}&--disable-web-security=true"
+    # Clean standard endpoint format without complex flags to avoid firewall timeout drops
+    ws_endpoint = f"wss://chrome.browserless.io/chromium?token={BROWSERLESS_TOKEN}"
     
     async with async_playwright() as p:
         st_status.text("🌐 Establishing connection to remote cloud browser...")
         try:
-            # Connect over standardized websocket string securely
-            browser = await p.chromium.connect(ws_endpoint, timeout=30000)
+            # Increased timeout threshold to ensure the connection handshakes reliably
+            browser = await p.chromium.connect(ws_endpoint, timeout=60000)
         except Exception as conn_err:
             st.error(f"Failed to connect to Browserless Cloud Instance: {str(conn_err)}")
             return []
@@ -68,23 +68,21 @@ async def run_deep_browser_scrape(target_url, max_scrolls):
             await browser.close()
             return []
         
-        # Initial scroll down to force initialization of YouTube comment components
+        # Initial scroll down to bring components into viewport focus
         await page.evaluate("window.scrollTo(0, 700);")
         await page.wait_for_timeout(3000)
         
-        # Iterative scrolling loop to gather deeper text frames lazily
+        # Iterative scrolling engine execution loop
         for scroll in range(int(max_scrolls)):
             st_status.text(f"⏳ Advancing view depth via scroll sequences ({scroll+1}/{max_scrolls})...")
             await page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight);")
             await page.wait_for_timeout(2500)
             
-            # Intercept verification tokens dynamically if presented during automated navigation loops
             if await page.locator("iframe[src*='recaptcha']").count() > 0:
                 token = await solve_captcha_via_api(target_url)
                 if token:
                     await page.evaluate(f'document.getElementById("g-recaptcha-response").innerHTML="{token}";')
         
-        # Uncover collapsed text layers cleanly across target container grids
         st_status.text("💥 Clicking 'Read more' toggles to expand hidden text...")
         expand_buttons = await page.locator("text=Read more").all()
         for btn in expand_buttons[:30]:
@@ -94,7 +92,6 @@ async def run_deep_browser_scrape(target_url, max_scrolls):
                 pass
                 
         st_status.text("🔍 Parsing loaded webpage text arrays for pattern matching...")
-        # Scrape raw text layouts directly from standard DOM selectors
         comment_nodes = await page.locator("#content-text").all_inner_texts()
         
         for text in comment_nodes:
@@ -111,7 +108,7 @@ async def run_deep_browser_scrape(target_url, max_scrolls):
         
     return emails_found
 
-# Render View Configuration Setup
+# Render View Layout Setup Configuration Engine
 st.set_page_config(page_title="Playwright Web Harvester", layout="centered")
 st.title("🎯 Playwright Cloud Harvester Engine")
 st.caption("Running fully integrated browser pipelines via Browserless & noCaptchaAi")
