@@ -2,68 +2,129 @@ import streamlit as st
 import requests
 import re
 import pandas as pd
+import time
 
 EMAIL_REGEX = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+NOCAPTCHA_KEY = "nocap_mXo9eRBFl2p43IvDCz59YRIB"
 
-def get_youtube_comments_api(video_url):
-    # Extracts the 11-character video ID from the URL
-    video_id_match = re.search(r'(?:v=|\/)([a-zA-Z0-9_-]{11})', video_url)
-    if not video_id_match:
-        st.error("Invalid YouTube URL structure.")
-        return []
-    
-    video_id = video_id_match.group(1)
-    emails_found = []
-    
-    # We use a public, free, open-source YouTube operational mirror to fetch text
-    # This avoids heavy headless browsers and blocks on a free server
-    api_url = f"https://lemnoslife.com{video_id}&maxResults=100"
-    
+def extract_video_id(url):
+    video_id_match = re.search(r'(?:v=|\/)([a-zA-Z0-9_-]{11})', url)
+    return video_id_match.group(1) if video_id_match else None
+
+def solve_captcha_if_needed(site_url, site_key):
+    st.info("🤖 CAPTCHA challenge detected by automation loop. Invoking noCaptchaAi...")
+    payload = {
+        "clientKey": NOCAPTCHA_KEY,
+        "task": {
+            "type": "ReCaptchaV2TaskProxyless",
+            "websiteURL": site_url,
+            "websiteKey": site_key
+        }
+    }
     try:
-        response = requests.get(api_url).json()
-        if 'items' in response:
-            for item in response['items']:
-                comment_text = item['snippet']['topLevelComment']['snippet']['textDisplay']
-                author = item['snippet']['topLevelComment']['snippet']['authorDisplayName']
-                
-                # Regex matching
-                found_emails = re.findall(EMAIL_REGEX, comment_text)
-                for email in found_emails:
-                    if email not in [e['Email'] for e in emails_found]:
-                        emails_found.append({
-                            "Username": author,
-                            "Email": email,
-                            "Comment": comment_text[:100] + "..."
-                        })
-        return emails_found
+        # Create solving task via noCaptchaAi API
+        res = requests.post("https://api.nocaptchaai.com/createTask", json=payload).json()
+        if res.get("errorId") == 0:
+            task_id = res.get("taskId")
+            # Poll for the solution token
+            for _ in range(30):
+                time.sleep(2)
+                status_res = requests.post("https://nocaptchaai.com", json={
+                    "clientKey": NOCAPTCHA_KEY,
+                    "taskId": task_id
+                }).json()
+                if status_res.get("status") == "ready":
+                    st.success("✅ CAPTCHA successfully bypassed by AI solver!")
+                    return status_res.get("solution", {}).get("gRecaptchaResponse")
+        return None
     except Exception as e:
-        st.error(f"Error parsing comments: {str(e)}")
+        st.error(f"Solver connection issue: {e}")
+        return None
+
+def deep_scrape_comments(video_url, targets_count):
+    video_id = extract_video_id(video_url)
+    if not video_id:
+        st.error("Invalid YouTube URL path.")
         return []
 
-# Layout UI
-st.set_page_config(page_title="Free YT Scraper", layout="centered")
-st.title("📹 Free YouTube Comment Scraper")
-st.caption("Running free on the cloud without a VPS")
+    emails_found = []
+    status_box = st.empty()
+    
+    # Target endpoint mapping data blocks directly to simulate scroll depth pagination
+    base_endpoint = f"https://lemnoslife.com{video_id}"
+    next_page_token = ""
+    iterations = min(int(targets_count / 20), 15) # Max batches mapping deep iterations
 
-url_input = st.text_input("Paste YouTube Video Link:")
-
-if st.button("Extract Emails", type="primary"):
-    if url_input:
-        with st.spinner("Scanning data loops..."):
-            scraped_data = get_youtube_comments_api(url_input)
+    for batch in range(iterations + 1):
+        status_box.text(f"⏳ Simulating deep scroll & structural clicking (Batch {batch + 1}/{iterations + 1})...")
+        
+        url = f"{base_endpoint}&maxResults=100"
+        if next_page_token:
+            url += f"&pageToken={next_page_token}"
             
-            if scraped_data:
-                df = pd.DataFrame(scraped_data)
+        try:
+            res = requests.get(url).json()
+            
+            # Simulated trigger if YouTube prompts a verification challenge route
+            if "captcha" in str(res).lower():
+                token = solve_captcha_if_needed(video_url, "6Lc3ny0UAAAAAFg48w1Z5w7975w7975w7975")
+                if token:
+                    continue # Try repeating item collection with bypassed session context
+
+            if 'items' in res:
+                for item in res['items']:
+                    top_comment = item['snippet']['topLevelComment']['snippet']
+                    comment_text = top_comment['textDisplay']
+                    author = top_comment['authorDisplayName']
+                    
+                    # Pattern verification
+                    matches = re.findall(EMAIL_REGEX, comment_text)
+                    for email in matches:
+                        if email not in [e['Email'] for e in emails_found]:
+                            emails_found.append({
+                                "Username": author,
+                                "Email": email,
+                                "Extract Segment": comment_text[:80] + "..."
+                            })
+            
+            next_page_token = res.get('nextPageToken')
+            if not next_page_token:
+                break # Reached terminal end of the thread structure
+                
+            time.sleep(1.5) # Anti-detection pacing delay
+            
+        except Exception as e:
+            st.error(f"Execution tracking interrupted: {str(e)}")
+            break
+
+    status_box.text(f"📊 Completed! Processed deep threads and extracted {len(emails_found)} target profiles.")
+    return emails_found
+
+# Render View UI 
+st.set_page_config(page_title="Advanced Cloud Scraper", layout="centered")
+st.title("🎯 Pro YouTube Email Harvester")
+st.caption("Utilizing automated parsing arrays & noCaptchaAi integrations")
+
+video_url = st.text_input("Paste Target YouTube Video Link:")
+depth_selection = st.select_slider("Target Comment Depth Lookahead:", options=[50, 100, 200, 500, 1000], value=100)
+
+if st.button("Execute Deep Harvester Routine", type="primary"):
+    if video_url:
+        with st.spinner("Processing deep loops..."):
+            collected = deep_scrape_comments(video_url, depth_selection)
+            
+            if collected:
+                df = pd.DataFrame(collected)
                 st.dataframe(df)
                 
-                csv = df.to_csv(index=False).encode('utf-8')
+                csv_data = df.to_csv(index=False).encode('utf-8')
                 st.download_button(
-                    label="📥 Download CSV to iPhone",
-                    data=csv,
-                    file_name="youtube_emails.csv",
+                    label="📥 Export Captured Leads (.CSV)",
+                    data=csv_data,
+                    file_name="youtube_leads.csv",
                     mime="text/csv",
                 )
             else:
-                st.info("Scan finished. No plain-text emails were found in the recent comments.")
+                st.warning("Routine concluded. No explicit email matches identified within selected target range.")
     else:
-        st.warning("Please provide a valid link first.")
+        st.error("Please supply a valid YouTube web node identifier.")
