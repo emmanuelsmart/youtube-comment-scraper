@@ -42,15 +42,15 @@ async def solve_captcha_via_api(url):
 
 async def run_deep_browser_scrape(target_url, max_scrolls):
     emails_found = []
-    status_msg = st.empty()
+    st_status = st.empty()
     
-    # Updated connection target formatting for native Playwright WebSocket handling
-    ws_endpoint = f"wss://chrome.browserless.io/playwright?token={BROWSERLESS_TOKEN}&--disable-web-security=true"
+    # FIX: Using /chromium path as required by the Browserless system architecture update
+    ws_endpoint = f"wss://chrome.browserless.io/chromium?token={BROWSERLESS_TOKEN}&--disable-web-security=true"
     
     async with async_playwright() as p:
-        status_msg.text("🌐 Establishing connection to remote cloud browser...")
+        st_status.text("🌐 Establishing connection to remote cloud browser...")
         try:
-            # Using the standardized connect driver instead of cdp connection profiles
+            # Connect over standardized websocket string securely
             browser = await p.chromium.connect(ws_endpoint, timeout=30000)
         except Exception as conn_err:
             st.error(f"Failed to connect to Browserless Cloud Instance: {str(conn_err)}")
@@ -59,7 +59,7 @@ async def run_deep_browser_scrape(target_url, max_scrolls):
         context = await browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
         page = await context.new_page()
         
-        status_msg.text("📹 Navigating to target video layout...")
+        st_status.text("📹 Navigating to target video layout...")
         try:
             await page.goto(target_url, wait_until="domcontentloaded", timeout=45000)
             await page.wait_for_timeout(4000)
@@ -68,39 +68,38 @@ async def run_deep_browser_scrape(target_url, max_scrolls):
             await browser.close()
             return []
         
-        # Initial scroll to bring the comment section DOM elements into active view
+        # Initial scroll down to force initialization of YouTube comment components
         await page.evaluate("window.scrollTo(0, 700);")
         await page.wait_for_timeout(3000)
         
-        # Scrolling loop to lazy-load the deeper comment blocks
+        # Iterative scrolling loop to gather deeper text frames lazily
         for scroll in range(int(max_scrolls)):
-            status_msg.text(f"⏳ Advancing view depth via scroll sequences ({scroll+1}/{max_scrolls})...")
+            st_status.text(f"⏳ Advancing view depth via scroll sequences ({scroll+1}/{max_scrolls})...")
             await page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight);")
             await page.wait_for_timeout(2500)
             
-            # Intercept any verification challenges dynamically during execution
+            # Intercept verification tokens dynamically if presented during automated navigation loops
             if await page.locator("iframe[src*='recaptcha']").count() > 0:
                 token = await solve_captcha_via_api(target_url)
                 if token:
                     await page.evaluate(f'document.getElementById("g-recaptcha-response").innerHTML="{token}";')
         
-        # Target and systematically click all 'Read more' text elements to uncover hidden strings
-        status_msg.text("💥 Clicking 'Read more' toggles to expand hidden text...")
+        # Uncover collapsed text layers cleanly across target container grids
+        st_status.text("💥 Clicking 'Read more' toggles to expand hidden text...")
         expand_buttons = await page.locator("text=Read more").all()
-        for btn in expand_buttons[:30]: # Limit processing batch to ensure stable execution parameters
+        for btn in expand_buttons[:30]:
             try:
                 await btn.click(timeout=1000)
             except:
                 pass
                 
-        status_msg.text("🔍 Parsing loaded webpage text arrays for pattern matching...")
-        # Extract plain text content directly from the YouTube structural selector nodes
+        st_status.text("🔍 Parsing loaded webpage text arrays for pattern matching...")
+        # Scrape raw text layouts directly from standard DOM selectors
         comment_nodes = await page.locator("#content-text").all_inner_texts()
         
         for text in comment_nodes:
             matches = re.findall(EMAIL_REGEX, text)
             for email in matches:
-                # Normalizing lookup dictionary key to prevent mismatch tracking
                 if email not in [e.get('Captured Email') for e in emails_found]:
                     emails_found.append({
                         "Captured Email": email,
@@ -112,7 +111,7 @@ async def run_deep_browser_scrape(target_url, max_scrolls):
         
     return emails_found
 
-# Render Layout Configuration Engine
+# Render View Configuration Setup
 st.set_page_config(page_title="Playwright Web Harvester", layout="centered")
 st.title("🎯 Playwright Cloud Harvester Engine")
 st.caption("Running fully integrated browser pipelines via Browserless & noCaptchaAi")
