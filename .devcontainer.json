@@ -1,0 +1,7 @@
+{
+  "name": "Auto Scraper Platform",
+  "image": "://microsoft.com",
+  "postCreateCommand": "pip install streamlit pandas playwright requests && playwright install --with-deps",
+  "waitFor": "postCreateCommand",
+  "updateContentCommand": "streamlit run app.py --server.port 8501 --server.address 0.0.0.0"
+}
